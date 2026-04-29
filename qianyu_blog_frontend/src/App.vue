@@ -1,11 +1,21 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
+</script>
 
 <template>
-  <h1>You did it!</h1>
-  <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
-  </p>
+  <div class="app-shell">
+    <header class="site-header">
+      <RouterLink class="brand" to="/">千语博客</RouterLink>
+      <nav>
+        <RouterLink to="/">首页</RouterLink>
+        <RouterLink to="/admin/posts">后台</RouterLink>
+        <button v-if="auth.isAuthenticated" class="link-button" @click="auth.logout()">退出</button>
+      </nav>
+    </header>
+    <main>
+      <RouterView />
+    </main>
+  </div>
 </template>
-
-<style scoped></style>

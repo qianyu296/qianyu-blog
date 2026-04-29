@@ -1,13 +1,145 @@
 package com.study.qianyu_blog;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
 class QianyuBlogApplicationTests {
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
     void contextLoads() {
     }
 
+    @Test
+    void publicCategoriesCanBeVisited() throws Exception {
+        mockMvc.perform(get("/api/public/categories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+    }
+
+    @Test
+    void adminPostsRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/admin/posts"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(40100));
+    }
+
+    @Test
+    void adminCanManageCategoryAndPost() throws Exception {
+        String token = loginToken();
+        long categoryId = createCategory(token);
+
+        mockMvc.perform(put("/api/admin/categories/" + categoryId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"技术更新","slug":"tech-updated","description":"更新后的技术文章"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("技术更新"));
+
+        mockMvc.perform(get("/api/admin/categories")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].slug").value("tech-updated"));
+
+        String postResponse = mockMvc.perform(post("/api/admin/posts")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"第一篇博客","summary":"文章摘要","content":"文章正文","categoryId":%d,"status":"PUBLISHED"}
+                                """.formatted(categoryId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("第一篇博客"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        long postId = objectMapper.readTree(postResponse).path("data").path("id").asLong();
+
+        mockMvc.perform(get("/api/admin/posts")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].title").value("第一篇博客"));
+
+        mockMvc.perform(get("/api/admin/posts/" + postId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.category.slug").value("tech-updated"));
+
+        mockMvc.perform(get("/api/public/posts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].title").value("第一篇博客"));
+
+        mockMvc.perform(put("/api/admin/posts/" + postId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"更新后的博客","summary":"文章摘要","content":"文章正文","categoryId":%d,"status":"DRAFT"}
+                                """.formatted(categoryId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        mockMvc.perform(delete("/api/admin/posts/" + postId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        mockMvc.perform(delete("/api/admin/categories/" + categoryId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+    }
+
+    private String loginToken() throws Exception {
+        String response = mockMvc.perform(post("/api/admin/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"admin","password":"admin123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        return objectMapper.readTree(response).path("data").path("token").asText();
+    }
+
+    private long createCategory(String token) throws Exception {
+        String response = mockMvc.perform(post("/api/admin/categories")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"技术","slug":"tech","description":"技术文章"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("技术"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        return objectMapper.readTree(response).path("data").path("id").asLong();
+    }
 }

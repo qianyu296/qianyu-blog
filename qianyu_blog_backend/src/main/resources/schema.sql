@@ -1,6 +1,8 @@
 -- 博客系统数据库初始化脚本
 -- 执行方式: mysql -u root -p < schema.sql
 
+SET NAMES utf8mb4;
+
 CREATE DATABASE IF NOT EXISTS qianyu_blog
   DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;

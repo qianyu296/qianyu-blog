@@ -6,8 +6,8 @@ import { useAuthStore } from '@/stores/auth'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const username = ref('admin')
-const password = ref('admin123')
+const username = ref('')
+const password = ref('')
 const error = ref('')
 const loading = ref(false)
 
@@ -33,15 +33,16 @@ async function submit() {
         <p class="muted">请输入您的账号信息</p>
       </div>
 
-      <form class="form" @submit.prevent="submit">
+      <form class="form" autocomplete="off" @submit.prevent="submit">
         <div class="form-group">
           <label class="form-label" for="username">用户名</label>
           <input
             id="username"
             v-model="username"
+            name="qianyu-admin-username"
             type="text"
             class="form-input"
-            autocomplete="username"
+            autocomplete="off"
             placeholder="请输入用户名"
             required
           />
@@ -52,9 +53,10 @@ async function submit() {
           <input
             id="password"
             v-model="password"
+            name="qianyu-admin-password"
             type="password"
             class="form-input"
-            autocomplete="current-password"
+            autocomplete="new-password"
             placeholder="请输入密码"
             required
           />

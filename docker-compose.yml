@@ -34,7 +34,7 @@ services:
       DB_URL: jdbc:mysql://mysql:3306/qianyu_blog?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
       DB_USERNAME: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-root-password}
-      JWT_SECRET: ${JWT_SECRET:-change-me-jwt-secret}
+      JWT_SECRET: ${JWT_SECRET:-change-me-jwt-secret-for-local-dev-please-change}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       MUSIC_STORAGE_DIR: /app/uploads/music
@@ -52,6 +52,10 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    command:
+      - /bin/sh
+      - -c
+      - until wget -q --spider http://backend:8080/api/public/categories; do sleep 1; done; exec nginx -g 'daemon off;'
     ports:
       - "${APP_PORT:-80}:80"
 

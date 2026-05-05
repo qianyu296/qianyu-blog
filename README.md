@@ -235,7 +235,7 @@ docker compose up -d --build
 ```env
 APP_PORT=80
 MYSQL_ROOT_PASSWORD=change-me-root-password
-JWT_SECRET=change-me-jwt-secret
+JWT_SECRET=change-me-jwt-secret-for-local-dev-please-change
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin123
 ```
@@ -275,7 +275,7 @@ docker compose up -d --build
 | `DB_USERNAME` | 数据库用户名 | `root` |
 | `DB_PASSWORD` | 数据库密码 | `123456` |
 | `SERVER_PORT` | 后端端口 | `8080` |
-| `JWT_SECRET` | JWT 密钥 | 示例值 |
+| `JWT_SECRET` | JWT 密钥，至少 32 个字符 | 示例值 |
 | `JWT_EXPIRATION_MINUTES` | Token 有效期 | `120` |
 | `ADMIN_USERNAME` | 初始管理员账号 | `admin` |
 | `ADMIN_PASSWORD` | 初始管理员密码 | `admin123` |
@@ -295,7 +295,7 @@ VITE_API_BASE_URL=http://localhost:8080
 - 用户名：`admin`
 - 密码：`admin123`
 
-建议部署前改成你自己的环境变量，不要直接用于公网环境。
+建议部署前改成你自己的环境变量，不要直接用于公网环境。`JWT_SECRET` 需要至少 32 个字符，否则后端会因 JWT 密钥强度不足而启动失败。
 
 ## 文件上传与资源存储
 

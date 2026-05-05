@@ -19,18 +19,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class PostService {
     private final PostRepository postRepository;
     private final CategoryService categoryService;
+    private final TagService tagService;
 
-    public PostService(PostRepository postRepository, CategoryService categoryService) {
+    public PostService(PostRepository postRepository, CategoryService categoryService, TagService tagService) {
         this.postRepository = postRepository;
         this.categoryService = categoryService;
+        this.tagService = tagService;
     }
 
     @Transactional(readOnly = true)
     public PageResponse<PostResponse> publicList(Long categoryId, int page, int size) {
         Pageable pageable = pageable(page, size);
-        Page<Post> posts = categoryId == null
-                ? postRepository.findByStatus(PostStatus.PUBLISHED, pageable)
-                : postRepository.findByStatusAndCategoryId(PostStatus.PUBLISHED, categoryId, pageable);
+        Page<Post> posts;
+        if (categoryId != null) {
+            posts = postRepository.findByStatusAndCategoryIdOrderByPinnedAndCreatedAt(PostStatus.PUBLISHED, categoryId, pageable);
+        } else {
+            posts = postRepository.findByStatusExcludingCategoryName(PostStatus.PUBLISHED, "碎碎念", pageable);
+        }
         return toPage(posts);
     }
 
@@ -57,14 +62,18 @@ public class PostService {
     public PostResponse create(PostRequest request) {
         Post post = new Post();
         apply(post, request);
-        return toResponse(postRepository.save(post));
+        Post saved = postRepository.save(post);
+        tagService.updateTagsForPost(saved, request.tags());
+        return toResponse(saved);
     }
 
     @Transactional
     public PostResponse update(Long id, PostRequest request) {
         Post post = getEntity(id);
         apply(post, request);
-        return toResponse(postRepository.save(post));
+        Post saved = postRepository.save(post);
+        tagService.updateTagsForPost(saved, request.tags());
+        return toResponse(saved);
     }
 
     @Transactional
@@ -82,10 +91,12 @@ public class PostService {
     private void apply(Post post, PostRequest request) {
         Category category = categoryService.getEntity(request.categoryId());
         post.setTitle(request.title());
-        post.setSummary(request.summary());
+        post.setSummary(normalizeOptionalText(request.summary()));
         post.setContent(request.content());
+        post.setCoverImageUrl(normalizeOptionalText(request.coverImageUrl()));
         post.setCategory(category);
         post.setStatus(request.status());
+        post.setIsPinned(request.isPinned() != null && request.isPinned());
     }
 
     private Pageable pageable(int page, int size) {
@@ -104,10 +115,21 @@ public class PostService {
                 post.getTitle(),
                 post.getSummary(),
                 post.getContent(),
+                post.getCoverImageUrl(),
                 post.getStatus(),
+                post.getIsPinned(),
                 categoryService.toResponse(post.getCategory()),
+                tagService.getTagsForPost(post.getId()),
                 post.getCreatedAt(),
                 post.getUpdatedAt()
         );
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 }

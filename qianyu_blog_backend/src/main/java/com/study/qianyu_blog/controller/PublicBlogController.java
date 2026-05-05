@@ -1,16 +1,8 @@
 package com.study.qianyu_blog.controller;
 
-import com.study.qianyu_blog.dto.ApiResponse;
-import com.study.qianyu_blog.dto.CategoryResponse;
-import com.study.qianyu_blog.dto.PageResponse;
-import com.study.qianyu_blog.dto.PostResponse;
-import com.study.qianyu_blog.service.CategoryService;
-import com.study.qianyu_blog.service.PostService;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import com.study.qianyu_blog.dto.*;
+import com.study.qianyu_blog.service.*;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -19,10 +11,12 @@ import java.util.List;
 public class PublicBlogController {
     private final CategoryService categoryService;
     private final PostService postService;
+    private final TagService tagService;
 
-    public PublicBlogController(CategoryService categoryService, PostService postService) {
+    public PublicBlogController(CategoryService categoryService, PostService postService, TagService tagService) {
         this.categoryService = categoryService;
         this.postService = postService;
+        this.tagService = tagService;
     }
 
     @GetMapping("/categories")
@@ -30,9 +24,15 @@ public class PublicBlogController {
         return ApiResponse.ok(categoryService.list());
     }
 
+    @GetMapping("/tags")
+    public ApiResponse<List<String>> tags() {
+        return ApiResponse.ok(tagService.getAllDistinctTags());
+    }
+
     @GetMapping("/posts")
     public ApiResponse<PageResponse<PostResponse>> posts(
             @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String tag,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {

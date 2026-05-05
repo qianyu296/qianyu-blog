@@ -7,12 +7,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -69,10 +70,11 @@ class QianyuBlogApplicationTests {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"title":"第一篇博客","summary":"文章摘要","content":"文章正文","categoryId":%d,"status":"PUBLISHED"}
+                                {"title":"第一篇博客","summary":"文章摘要","content":"文章正文","coverImageUrl":"https://example.com/cover.jpg","categoryId":%d,"status":"PUBLISHED"}
                                 """.formatted(categoryId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title").value("第一篇博客"))
+                .andExpect(jsonPath("$.data.coverImageUrl").value("https://example.com/cover.jpg"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -97,10 +99,11 @@ class QianyuBlogApplicationTests {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"title":"更新后的博客","summary":"文章摘要","content":"文章正文","categoryId":%d,"status":"DRAFT"}
+                                {"title":"更新后的博客","summary":"文章摘要","content":"文章正文","coverImageUrl":"","categoryId":%d,"status":"DRAFT"}
                                 """.formatted(categoryId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("DRAFT"));
+                .andExpect(jsonPath("$.data.status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.coverImageUrl").isEmpty());
 
         mockMvc.perform(delete("/api/admin/posts/" + postId)
                         .header("Authorization", "Bearer " + token))
@@ -111,6 +114,66 @@ class QianyuBlogApplicationTests {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
+    }
+
+    @Test
+    void adminCanSaveSiteSettingsAndUploadMedia() throws Exception {
+        String token = loginToken();
+
+        mockMvc.perform(post("/api/admin/site-settings")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "siteName":"新的千语博客",
+                                  "siteSubtitle":"新的副标题",
+                                  "heroBadge":"开发 · 记录",
+                                  "heroTitle":"新的主标题",
+                                  "heroDescription":"新的首页描述",
+                                  "avatarImageUrl":"https://example.com/avatar.png",
+                                  "heroBackgroundImageUrl":"https://example.com/bg.png",
+                                  "defaultPostCoverUrl":"https://example.com/default-cover.png",
+                                  "githubUrl":"https://github.com/example",
+                                  "email":"hello@example.com",
+                                  "footerText":"新的页脚"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.siteName").value("新的千语博客"));
+
+        mockMvc.perform(get("/api/public/site/settings"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.heroTitle").value("新的主标题"));
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "cover.png",
+                MediaType.IMAGE_PNG_VALUE,
+                "fake-image-content".getBytes()
+        );
+
+        String uploadResponse = mockMvc.perform(multipart("/api/admin/media")
+                        .file(file)
+                        .param("displayName", "封面图")
+                        .param("altText", "文章封面")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.displayName").value("封面图"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode uploadJson = objectMapper.readTree(uploadResponse);
+        long mediaId = uploadJson.path("data").path("id").asLong();
+
+        mockMvc.perform(get("/api/admin/media")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value(mediaId));
+
+        mockMvc.perform(get("/api/public/media/" + mediaId + "/file"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType(MediaType.IMAGE_PNG));
     }
 
     private String loginToken() throws Exception {

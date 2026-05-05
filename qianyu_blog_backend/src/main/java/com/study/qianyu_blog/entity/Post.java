@@ -1,24 +1,18 @@
 package com.study.qianyu_blog.entity;
 
 import com.study.qianyu_blog.enums.PostStatus;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "posts")
+@Getter
+@Setter
 public class Post {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,15 +21,24 @@ public class Post {
     @Column(nullable = false, length = 120)
     private String title;
 
-    @Column(nullable = false, length = 255)
+    @Column(length = 255)
     private String summary;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(length = 500)
+    private String coverImageUrl;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
+
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Tag> tags = new ArrayList<>();
+
+    @Column(nullable = false)
+    private Boolean isPinned = false;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -54,6 +57,9 @@ public class Post {
         if (status == null) {
             status = PostStatus.DRAFT;
         }
+        if (isPinned == null) {
+            isPinned = false;
+        }
     }
 
     @PreUpdate
@@ -61,59 +67,13 @@ public class Post {
         updatedAt = LocalDateTime.now();
     }
 
-    public Long getId() {
-        return id;
+    public void addTag(Tag tag) {
+        tags.add(tag);
+        tag.setPost(this);
     }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getSummary() {
-        return summary;
-    }
-
-    public void setSummary(String summary) {
-        this.summary = summary;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public void setContent(String content) {
-        this.content = content;
-    }
-
-    public Category getCategory() {
-        return category;
-    }
-
-    public void setCategory(Category category) {
-        this.category = category;
-    }
-
-    public PostStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(PostStatus status) {
-        this.status = status;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
+    public void clearTags() {
+        tags.forEach(t -> t.setPost(null));
+        tags.clear();
     }
 }

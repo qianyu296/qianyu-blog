@@ -1,3 +1,8 @@
 .claude/
 .omc/
+.agents/
+.trae/
+skills/
+skills-lock.json
+aura-music-main/
 excalidraw.log

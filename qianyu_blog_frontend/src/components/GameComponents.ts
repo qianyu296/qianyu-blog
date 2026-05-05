@@ -1,0 +1,6 @@
+export { default as SnakeGame } from '@/components/games/SnakeGame.vue'
+export { default as Game2048 } from '@/components/games/Game2048.vue'
+export { default as TypingGame } from '@/components/games/TypingGame.vue'
+export { default as MemoryGame } from '@/components/games/MemoryGame.vue'
+export { default as BreakoutGame } from '@/components/games/BreakoutGame.vue'
+export { default as FlappyGame } from '@/components/games/FlappyGame.vue'

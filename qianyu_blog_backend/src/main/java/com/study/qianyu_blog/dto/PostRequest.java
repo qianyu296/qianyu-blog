@@ -5,11 +5,16 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
+
 public record PostRequest(
         @NotBlank @Size(max = 120) String title,
-        @NotBlank @Size(max = 255) String summary,
+        @Size(max = 255) String summary,
         @NotBlank String content,
+        @Size(max = 500) String coverImageUrl,
         @NotNull Long categoryId,
+        List<String> tags,
+        Boolean isPinned,
         @NotNull PostStatus status
 ) {
 }

@@ -1,6 +1,12 @@
 HELP.md
 target/
-uploads/
+uploads/*
+!uploads/media/
+!uploads/music/
+uploads/media/*
+!uploads/media/.gitkeep
+uploads/music/*
+!uploads/music/.gitkeep
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

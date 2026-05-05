@@ -40,5 +40,6 @@ __screenshots__/
 
 test-results/
 playwright-report/
-photo/
+photo/*
+!photo/.gitkeep
 .env.development

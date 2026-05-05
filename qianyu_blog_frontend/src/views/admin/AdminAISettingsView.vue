@@ -52,7 +52,7 @@ async function saveSettings() {
   success.value = ''
 
   if (!form.value.apiEndpoint.trim()) {
-    error.value = '聊天 API 端点不能为空，格式如：https://api.openai.com/v1/chat/completions'
+    error.value = '聊天 API 端点不能为空，格式如：https://api.openai.com/v1/chat/completions 或 https://api.openai.com/v1/responses'
     return
   }
 
@@ -120,7 +120,7 @@ onMounted(loadSettings)
             v-model="form.apiEndpoint"
             type="text"
             class="form-input"
-            placeholder="https://api.openai.com/v1/chat/completions"
+            placeholder="https://api.openai.com/v1/chat/completions 或 https://api.openai.com/v1/responses"
           />
         </div>
 

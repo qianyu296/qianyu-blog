@@ -21,9 +21,11 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -65,6 +67,10 @@ public class AiService {
                 .orElseThrow(() -> new BusinessException(40000, "AI功能未配置或已禁用"));
 
         try {
+            if (isResponsesApi(settings.getApiEndpoint())) {
+                return callResponsesApi(settings, null, message);
+            }
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(settings.getChatApiKey());
@@ -115,6 +121,15 @@ public class AiService {
     public void chatStream(String message, OutputStream outputStream) throws Exception {
         AiSettings settings = aiSettingsRepository.findTopByEnabledTrue()
                 .orElseThrow(() -> new BusinessException(40000, "AI功能未配置或已禁用"));
+
+        if (isResponsesApi(settings.getApiEndpoint())) {
+            String content = callResponsesApi(settings, null, message);
+            String sseData = "data: " + objectMapper.writeValueAsString(Map.of("content", content)) + "\n\n";
+            outputStream.write(sseData.getBytes(StandardCharsets.UTF_8));
+            outputStream.write("data: [DONE]\n\n".getBytes(StandardCharsets.UTF_8));
+            outputStream.flush();
+            return;
+        }
 
         URL url = new URL(settings.getApiEndpoint());
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -194,6 +209,13 @@ public class AiService {
                 .orElseThrow(() -> new BusinessException(40000, "AI功能未配置或已禁用"));
 
         try {
+            String systemPrompt = "你是一名中文内容编辑。你的任务是润色博客文章，不改变原意，不新增未经用户提供的事实，输出必须是可直接发布的 Markdown 正文。";
+            String userPrompt = buildPolishPrompt(title, summary, content);
+
+            if (isResponsesApi(settings.getApiEndpoint())) {
+                return stripMarkdownCodeFence(callResponsesApi(settings, systemPrompt, userPrompt));
+            }
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(settings.getChatApiKey());
@@ -202,9 +224,8 @@ public class AiService {
             requestBody.put("model", settings.getModelName());
             requestBody.put("stream", false);
             requestBody.put("messages", List.of(
-                    Map.of("role", "system", "content",
-                            "你是一名中文内容编辑。你的任务是润色博客文章，不改变原意，不新增未经用户提供的事实，输出必须是可直接发布的 Markdown 正文。"),
-                    Map.of("role", "user", "content", buildPolishPrompt(title, summary, content))
+                    Map.of("role", "system", "content", systemPrompt),
+                    Map.of("role", "user", "content", userPrompt)
             ));
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
@@ -276,6 +297,102 @@ public class AiService {
                 正文：
                 %s
                 """.formatted(safeTitle, safeSummary, safeContent);
+    }
+
+    private boolean isResponsesApi(String endpoint) {
+        if (endpoint == null || endpoint.isBlank()) {
+            return false;
+        }
+
+        try {
+            String path = URI.create(endpoint.trim()).getPath();
+            return path != null && path.endsWith("/responses");
+        } catch (IllegalArgumentException ignored) {
+            return endpoint.contains("/responses");
+        }
+    }
+
+    private String callResponsesApi(AiSettings settings, String instructions, String input) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(settings.getChatApiKey());
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", settings.getModelName());
+            requestBody.put("input", input);
+            requestBody.put("max_output_tokens", settings.getMaxTokens() != null ? settings.getMaxTokens() : 4096);
+            if (instructions != null && !instructions.isBlank()) {
+                requestBody.put("instructions", instructions);
+            }
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    settings.getApiEndpoint(),
+                    HttpMethod.POST,
+                    entity,
+                    String.class
+            );
+
+            String body = response.getBody();
+            int statusCode = response.getStatusCode().value();
+
+            if (statusCode != 200) {
+                throw new BusinessException(
+                        statusCode,
+                        "API返回了错误状态码: " + statusCode + "，响应: " + abbreviate(body)
+                );
+            }
+
+            if (body == null || body.trim().startsWith("<")) {
+                throw new BusinessException(40002, "API返回了非JSON响应，响应: " + abbreviate(body));
+            }
+
+            Map<String, Object> responseMap = objectMapper.readValue(body, Map.class);
+            return extractResponsesText(responseMap);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(40001, "AI调用失败: " + e.getMessage());
+        }
+    }
+
+    private String extractResponsesText(Map<String, Object> responseMap) {
+        Object outputText = responseMap.get("output_text");
+        if (outputText instanceof String text && !text.isBlank()) {
+            return text;
+        }
+
+        List<Map<String, Object>> output = (List<Map<String, Object>>) responseMap.get("output");
+        if (output == null || output.isEmpty()) {
+            throw new BusinessException(40002, "Responses API 返回结构中没有可用文本");
+        }
+
+        List<String> parts = new ArrayList<>();
+        for (Map<String, Object> item : output) {
+            Object content = item.get("content");
+            if (!(content instanceof List<?> contentList)) {
+                continue;
+            }
+
+            for (Object contentItemObj : contentList) {
+                if (!(contentItemObj instanceof Map<?, ?> rawContentItem)) {
+                    continue;
+                }
+
+                Object type = rawContentItem.get("type");
+                Object text = rawContentItem.get("text");
+                if ("output_text".equals(type) && text instanceof String textValue && !textValue.isBlank()) {
+                    parts.add(textValue);
+                }
+            }
+        }
+
+        if (!parts.isEmpty()) {
+            return String.join("", parts);
+        }
+
+        throw new BusinessException(40002, "Responses API 返回结构中没有可用文本");
     }
 
     private String stripMarkdownCodeFence(String value) {

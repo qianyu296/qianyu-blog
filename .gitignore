@@ -2,6 +2,7 @@
 .omc/
 .agents/
 .trae/
+.env
 .idea/
 skills/
 skills-lock.json

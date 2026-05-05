@@ -39,6 +39,7 @@ type ImageHistoryItem = {
 const IMAGE_TIMEOUT_MS = 3 * 60 * 1000
 const HISTORY_STORAGE_KEY = 'qianyu_ai_image_history'
 const HISTORY_LIMIT = 24
+const PERSISTED_IMAGE_URL_MAX_LENGTH = 200_000
 
 const imagePresets: ImagePreset[] = [
   { id: 'auto', title: '自动判断', ratio: 'Auto', description: '按提示词内容自动推断最合适的尺寸。' },
@@ -70,6 +71,7 @@ const expandedHistoryId = ref<number | null>(null)
 
 let nextMessageId = 1
 let clockTimer: number | null = null
+const activeObjectUrls = new Set<string>()
 
 const selectedPreset = computed<ImagePreset>(() => presetMap.get(selectedPresetId.value) ?? defaultPreset)
 
@@ -78,7 +80,12 @@ function createMessage(message: Omit<ChatUiMessage, 'id'>): ChatUiMessage {
 }
 
 function restoreHistory() {
-  const raw = localStorage.getItem(HISTORY_STORAGE_KEY)
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(HISTORY_STORAGE_KEY)
+  } catch {
+    return
+  }
   if (!raw) return
 
   try {
@@ -112,6 +119,23 @@ function restoreHistory() {
 function pushHistory(item: ImageHistoryItem) {
   imageHistory.value = [item, ...imageHistory.value.filter(history => history.id !== item.id)].slice(0, HISTORY_LIMIT)
   expandedHistoryId.value = item.id
+}
+
+function canPersistHistoryItem(item: ImageHistoryItem) {
+  if (!item.imageUrl) return false
+  if (item.imageUrl.startsWith('blob:')) return false
+  if (!item.imageUrl.startsWith('data:')) return true
+  return item.imageUrl.length <= PERSISTED_IMAGE_URL_MAX_LENGTH
+}
+
+async function createDisplayImageUrl(url: string) {
+  if (!url.startsWith('data:')) return url
+
+  const response = await fetch(url)
+  const blob = await response.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  activeObjectUrls.add(objectUrl)
+  return objectUrl
 }
 
 function clearHistory() {
@@ -298,6 +322,7 @@ async function generateImage() {
 
   try {
     const result = await blogApi.generateImage({ prompt, size: preset.size }, controller.signal)
+    const displayImageUrl = await createDisplayImageUrl(result.url)
     const finishedAt = Date.now()
     const generationSeconds = Math.max(1, Math.round((finishedAt - startedAt) / 1000))
 
@@ -305,7 +330,7 @@ async function generateImage() {
       const updatedMessage: ChatUiMessage = {
         ...messages.value[assistantIndex],
         content: '已生成 1 张图片',
-        imageUrl: result.url,
+        imageUrl: displayImageUrl,
         pendingImage: false,
         finishedAt,
         generationSeconds,
@@ -315,7 +340,7 @@ async function generateImage() {
       pushHistory({
         id: updatedMessage.id,
         prompt,
-        imageUrl: result.url,
+        imageUrl: displayImageUrl,
         finishedAt,
         generationSeconds,
         presetId: preset.id,
@@ -363,7 +388,14 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 watch(imageHistory, (value) => {
-  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(value))
+  try {
+    const persistableItems = value
+      .filter(canPersistHistoryItem)
+      .slice(0, HISTORY_LIMIT)
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(persistableItems))
+  } catch {
+    // Ignore storage quota and privacy-mode failures; keep history in memory for this session.
+  }
   if (expandedHistoryId.value !== null && !value.some(item => item.id === expandedHistoryId.value)) {
     expandedHistoryId.value = null
   }
@@ -381,6 +413,8 @@ onUnmounted(() => {
   if (clockTimer !== null) {
     window.clearInterval(clockTimer)
   }
+  activeObjectUrls.forEach(url => URL.revokeObjectURL(url))
+  activeObjectUrls.clear()
 })
 </script>
 

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import myPhoto from '../../photo/my.jpg'
+
 const fallback = {
   siteName: '千语',
   heroTitle: '写作是给时间留下索引。',
@@ -21,7 +23,7 @@ const siteName = ref(fallback.siteName)
     <div class="about-grid">
       <div class="portrait-wrap">
         <div class="portrait">
-          <img src="/default-avatar.svg" :alt="siteName" />
+          <img :src="myPhoto" :alt="siteName" />
         </div>
       </div>
 

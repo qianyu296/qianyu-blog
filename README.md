@@ -234,10 +234,13 @@ docker compose up -d --build
 
 ```env
 APP_PORT=80
-MYSQL_ROOT_PASSWORD=change-me-root-password
-JWT_SECRET=change-me-jwt-secret-for-local-dev-please-change
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
+QIANYU_BLOG_MYSQL_ROOT_PASSWORD=change-me-qianyu-blog-mysql-root-password
+QIANYU_BLOG_DB_URL=jdbc:mysql://localhost:3306/qianyu_blog?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+QIANYU_BLOG_DB_USERNAME=root
+QIANYU_BLOG_DB_PASSWORD=change-me-db-password
+QIANYU_BLOG_JWT_SECRET=change-me-qianyu-blog-jwt-secret-at-least-32-chars
+QIANYU_BLOG_ADMIN_USERNAME=change-me-admin-username
+QIANYU_BLOG_ADMIN_PASSWORD=change-me-admin-password
 ```
 
 ### 数据持久化
@@ -271,16 +274,16 @@ docker compose up -d --build
 
 | 配置项 | 说明 | 默认值 |
 | --- | --- | --- |
-| `DB_URL` | MySQL 连接串 | `jdbc:mysql://localhost:3306/qianyu_blog...` |
-| `DB_USERNAME` | 数据库用户名 | `root` |
-| `DB_PASSWORD` | 数据库密码 | `123456` |
-| `SERVER_PORT` | 后端端口 | `8080` |
-| `JWT_SECRET` | JWT 密钥，至少 32 个字符 | 示例值 |
-| `JWT_EXPIRATION_MINUTES` | Token 有效期 | `120` |
-| `ADMIN_USERNAME` | 初始管理员账号 | `admin` |
-| `ADMIN_PASSWORD` | 初始管理员密码 | `admin123` |
-| `MUSIC_STORAGE_DIR` | 音乐文件目录 | `uploads/music` |
-| `MEDIA_STORAGE_DIR` | 图片文件目录 | `uploads/media` |
+| `QIANYU_BLOG_DB_URL` | MySQL 连接串 | 无默认值 |
+| `QIANYU_BLOG_DB_USERNAME` | 数据库用户名 | 无默认值 |
+| `QIANYU_BLOG_DB_PASSWORD` | 数据库密码 | 无默认值 |
+| `QIANYU_BLOG_SERVER_PORT` | 后端端口 | `8080` |
+| `QIANYU_BLOG_JWT_SECRET` | JWT 密钥，至少 32 个字符 | 无默认值 |
+| `QIANYU_BLOG_JWT_EXPIRATION_MINUTES` | Token 有效期 | `120` |
+| `QIANYU_BLOG_ADMIN_USERNAME` | 初始管理员账号 | 无默认值 |
+| `QIANYU_BLOG_ADMIN_PASSWORD` | 初始管理员密码 | 无默认值 |
+| `QIANYU_BLOG_MUSIC_STORAGE_DIR` | 音乐文件目录 | `uploads/music` |
+| `QIANYU_BLOG_MEDIA_STORAGE_DIR` | 图片文件目录 | `uploads/media` |
 
 前端环境变量：
 
@@ -290,12 +293,9 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ## 默认管理员账号
 
-后端启动时会自动检查管理员账号是否存在；如果不存在，会按配置自动创建。
+后端启动时会自动检查管理员账号是否存在；如果不存在，会按 `QIANYU_BLOG_ADMIN_USERNAME` 和 `QIANYU_BLOG_ADMIN_PASSWORD` 自动创建。
 
-- 用户名：`admin`
-- 密码：`admin123`
-
-建议部署前改成你自己的环境变量，不要直接用于公网环境。`JWT_SECRET` 需要至少 32 个字符，否则后端会因 JWT 密钥强度不足而启动失败。
+建议部署前改成你自己的环境变量，不要直接用于公网环境。`QIANYU_BLOG_JWT_SECRET` 需要至少 32 个字符，否则后端会因 JWT 密钥强度不足而启动失败。
 
 ## 文件上传与资源存储
 
@@ -342,7 +342,7 @@ npm run test:e2e
 
 ### 1. 敏感配置
 
-`application.properties` 中当前保留了开发默认值，包括数据库密码、JWT Secret 和管理员默认口令。公开到 GitHub 前，建议：
+`application.properties` 已经改为通过环境变量读取敏感配置。公开到 GitHub 前，建议：
 
 - 仅保留示例值
 - 生产环境改为环境变量注入

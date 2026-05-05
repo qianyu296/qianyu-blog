@@ -104,37 +104,6 @@ export interface MusicTrack {
   updatedAt?: string
 }
 
-export interface SiteSettings {
-  id: number
-  siteName: string
-  siteSubtitle?: string
-  heroBadge?: string
-  heroTitle: string
-  heroDescription: string
-  avatarImageUrl?: string
-  heroBackgroundImageUrl?: string
-  defaultPostCoverUrl?: string
-  githubUrl?: string
-  email?: string
-  footerText?: string
-  createdAt?: string
-  updatedAt?: string
-}
-
-export interface SiteSettingsPayload {
-  siteName: string
-  siteSubtitle?: string
-  heroBadge?: string
-  heroTitle: string
-  heroDescription: string
-  avatarImageUrl?: string
-  heroBackgroundImageUrl?: string
-  defaultPostCoverUrl?: string
-  githubUrl?: string
-  email?: string
-  footerText?: string
-}
-
 export interface MediaAsset {
   id: number
   originalFileName: string

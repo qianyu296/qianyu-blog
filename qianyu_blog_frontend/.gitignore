@@ -42,4 +42,5 @@ test-results/
 playwright-report/
 photo/*
 !photo/.gitkeep
+!photo/my.jpg
 .env.development

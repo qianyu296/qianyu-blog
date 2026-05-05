@@ -1,10 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { blogApi } from '@/api/blog'
-import type { SiteSettings } from '@/types/blog'
-import portraitUrl from '../../photo/my.jpg'
-
-const settings = ref<SiteSettings | null>(null)
+import { ref } from 'vue'
 const fallback = {
   siteName: '千语',
   heroTitle: '写作是给时间留下索引。',
@@ -14,18 +9,6 @@ const fallback = {
 const title = ref(fallback.heroTitle)
 const description = ref(fallback.heroDescription)
 const siteName = ref(fallback.siteName)
-
-onMounted(async () => {
-  try {
-    const data = await blogApi.publicSiteSettings()
-    settings.value = data
-    if (data.siteName) siteName.value = data.siteName
-    if (data.heroTitle) title.value = data.heroTitle
-    if (data.heroDescription) description.value = data.heroDescription
-  } catch {
-    // use fallback values
-  }
-})
 </script>
 
 <template>
@@ -38,7 +21,7 @@ onMounted(async () => {
     <div class="about-grid">
       <div class="portrait-wrap">
         <div class="portrait">
-          <img :src="portraitUrl" :alt="siteName" />
+          <img src="/default-avatar.svg" :alt="siteName" />
         </div>
       </div>
 
@@ -79,7 +62,7 @@ onMounted(async () => {
 }
 
 .section-title {
-  font-family: var(--font-display, serif);
+  font-family: var(--font-serif, serif);
   font-size: clamp(1.8rem, 4.5vw, 3.2rem);
   font-weight: 700;
   color: var(--color-text);
@@ -121,7 +104,7 @@ onMounted(async () => {
 }
 
 .copy-title {
-  font-family: var(--font-display, serif);
+  font-family: var(--font-serif, serif);
   font-size: clamp(2.2rem, 5vw, 5rem);
   font-weight: 700;
   line-height: 1.15;

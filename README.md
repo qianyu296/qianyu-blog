@@ -1,22 +1,24 @@
 # 千语博客
 
-一个前后端分离的个人博客项目，包含博客内容管理、分类与标签、图片资源库、音乐频道、AI 对话与生图、后台管理等能力。
+一个前后端分离的个人博客项目，包含文章管理、分类与标签、图片资源库、音乐频道、AI 对话与生图、后台管理等能力。
 
 项目由两个子应用组成：
 
 - `qianyu_blog_backend`：Spring Boot 3 后端
 - `qianyu_blog_frontend`：Vue 3 + TypeScript 前端
 
-## 项目特性
+## 当前功能
 
 ### 前台站点
 
-- 首页文章列表与文章详情页
-- 分类筛选、标签列表、归档页
-- 关于页、光影相册页、小游戏中心
-- 音乐频道页，支持公共曲库播放
-- AI 对话页，支持流式聊天与图片生成
-- 站点信息动态读取，可从后台配置站点标题、副标题、Hero 文案等
+- 首页文章列表
+- 文章详情页
+- 分类筛选与标签列表
+- 归档页
+- 关于页
+- 光影相册页
+- 音乐频道页
+- AI 对话与图片生成页
 
 ### 后台管理
 
@@ -24,16 +26,24 @@
 - 文章管理：新增、编辑、删除、发布状态、置顶
 - 分类管理
 - 图片资源管理：上传、查询、删除
-- 音乐管理：上传音频、歌词文件、更新曲目信息、删除
-- AI 设置管理：模型、接口地址、Key、最大输出长度
+- 音乐管理：上传音频、更新信息、删除
+- AI 设置管理
 - AI 辅助润色文章
-- 站点信息配置
 
 ### 其他能力
 
-- 提供 Swagger / OpenAPI 文档
-- 提供 `schema.sql` 初始化数据库脚本
-- 后端包含基础测试，测试环境可使用 H2
+- Swagger / OpenAPI 文档
+- `schema.sql` 数据库初始化脚本
+- 后端基础集成测试
+
+## 已移除模块
+
+当前版本已经移除以下模块：
+
+- 小游戏中心
+- 站点配置管理
+
+对应的前端路由、页面、组件，以及后端接口、服务、实体、测试引用都已删除。
 
 ## 技术栈
 
@@ -81,32 +91,31 @@ qianyu_blog/
 │  └─ src/test/
 └─ qianyu_blog_frontend/
    ├─ package.json
-   ├─ src/
-   │  ├─ api/
-   │  ├─ components/
-   │  ├─ composables/
-   │  ├─ constants/
-   │  ├─ router/
-   │  ├─ stores/
-   │  ├─ types/
-   │  ├─ utils/
-   │  └─ views/
-   └─ public/
+   ├─ public/
+   └─ src/
+      ├─ api/
+      ├─ components/
+      ├─ composables/
+      ├─ constants/
+      ├─ router/
+      ├─ stores/
+      ├─ types/
+      ├─ utils/
+      └─ views/
 ```
 
-## 主要页面
+## 主要路由
 
-### 前台路由
+### 前台
 
 - `/`：首页
 - `/posts/:id`：文章详情
 - `/archive`：归档页
 - `/about`：关于页
 - `/light`：光影相册
-- `/games`：小游戏中心
 - `/chat`：AI 对话 / AI 生图
 
-### 后台路由
+### 后台
 
 - `/admin/login`：后台登录
 - `/admin/dashboard`：控制台
@@ -120,7 +129,6 @@ qianyu_blog/
 
 ### 公开接口
 
-- `GET /api/public/site/settings`：站点配置
 - `GET /api/public/categories`：分类列表
 - `GET /api/public/tags`：标签列表
 - `GET /api/public/posts`：文章列表
@@ -137,7 +145,6 @@ qianyu_blog/
 - `GET/POST/PUT/DELETE /api/admin/categories`：分类管理
 - `GET/POST/DELETE /api/admin/media`：图片资源管理
 - `POST/PUT/DELETE /api/admin/music`：音乐管理
-- `GET/POST /api/admin/site-settings`：站点设置
 - `GET/POST /api/admin/ai/settings`：AI 设置
 - `POST /api/admin/ai/polish`：AI 润色文章
 
@@ -169,8 +176,6 @@ qianyu_blog/
 SOURCE qianyu_blog_backend/src/main/resources/schema.sql;
 ```
 
-或者手动执行 `schema.sql` 中的建库建表语句。
-
 ### 2. 启动后端
 
 ```powershell
@@ -199,7 +204,7 @@ npm run dev
 
 后端主要配置位于 `qianyu_blog_backend/src/main/resources/application.properties`。
 
-常用配置项如下：
+常用配置项：
 
 | 配置项 | 说明 | 默认值 |
 | --- | --- | --- |
@@ -214,7 +219,7 @@ npm run dev
 | `MUSIC_STORAGE_DIR` | 音乐文件目录 | `uploads/music` |
 | `MEDIA_STORAGE_DIR` | 图片文件目录 | `uploads/media` |
 
-前端通过环境变量控制后端地址：
+前端环境变量：
 
 ```env
 VITE_API_BASE_URL=http://localhost:8080
@@ -224,21 +229,19 @@ VITE_API_BASE_URL=http://localhost:8080
 
 后端启动时会自动检查管理员账号是否存在；如果不存在，会按配置自动创建。
 
-默认值：
-
 - 用户名：`admin`
 - 密码：`admin123`
 
-建议在首次部署前改成你自己的环境变量，不要直接用于公网环境。
+建议部署前改成你自己的环境变量，不要直接用于公网环境。
 
 ## 文件上传与资源存储
 
-本项目默认把上传文件存放在后端本地目录：
+默认上传目录：
 
 - 图片：`qianyu_blog_backend/uploads/media`
 - 音乐：`qianyu_blog_backend/uploads/music`
 
-这些目录通常不应提交到 Git 仓库，仓库里应只保留源码和配置。
+这些目录通常不应提交真实资源文件到 Git 仓库。
 
 ## 测试与构建
 
@@ -265,45 +268,31 @@ npm run test:e2e
 
 ## 当前实现包含的内容
 
-基于仓库现状，这个版本已经包含：
-
 - 博客文章、分类、标签的数据模型与接口
 - 后台文章与分类管理
-- 站点设置动态化
 - 图片资源管理与公开访问
-- 音乐上传、播放与频道式展示
+- 音乐上传、播放与频道展示
 - AI 对话、AI 生图、AI 润色
-- 多个前端扩展页面与小游戏页面
+- 关于页、相册页、归档页等前台页面
 
-## 已知注意事项
+## 注意事项
 
-### 1. 关于页头像资源
+### 1. 敏感配置
 
-`qianyu_blog_frontend/src/views/AboutView.vue` 当前直接引用了本地图片文件：
-
-- `qianyu_blog_frontend/photo/my.jpg`
-
-如果你没有把这个目录一并提交，克隆仓库后前端构建可能失败。更稳妥的做法有两种：
-
-- 把该头像图放到可跟踪的 `src/assets` 或 `public` 目录
-- 或者修改关于页为使用后台站点配置中的头像地址
-
-### 2. 公开仓库中的敏感配置
-
-`application.properties` 中现在保留了开发用默认值，包括数据库密码、JWT Secret 和管理员默认口令。公开到 GitHub 前，建议：
+`application.properties` 中当前保留了开发默认值，包括数据库密码、JWT Secret 和管理员默认口令。公开到 GitHub 前，建议：
 
 - 仅保留示例值
-- 生产环境统一改为环境变量注入
+- 生产环境改为环境变量注入
 - 不要把真实 API Key、数据库密码提交到仓库
 
-### 3. AI 功能依赖外部模型服务
+### 2. AI 功能依赖外部模型服务
 
 AI 对话、AI 生图和文章润色功能需要先在后台配置可用的模型接口地址和 API Key，否则相关接口会返回配置错误。
 
 ## 后续可完善方向
 
 - 增加 Docker / Docker Compose 部署方案
-- 补充完整的接口文档与示例请求
+- 补充更完整的接口文档与示例请求
 - 给媒体和音乐资源接入对象存储
 - 完善权限模型与后台角色控制
 - 补齐前后端自动化测试

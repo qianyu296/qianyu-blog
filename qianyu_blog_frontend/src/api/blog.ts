@@ -10,8 +10,6 @@ import type {
   PageResponse,
   Post,
   PostPayload,
-  SiteSettings,
-  SiteSettingsPayload,
 } from '@/types/blog'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
@@ -69,7 +67,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const blogApi = {
-  publicSiteSettings: () => request<SiteSettings>('/api/public/site/settings'),
   publicCategories: () => request<Category[]>('/api/public/categories'),
   publicTags: () => request<string[]>('/api/public/tags'),
   publicPosts: (categoryId?: number, tag?: string) => {
@@ -116,11 +113,6 @@ export const blogApi = {
     body: JSON.stringify(payload),
   }),
   polishPost: (payload: { title?: string; summary?: string; content: string }) => request<{ content: string }>('/api/admin/ai/polish', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }),
-  getSiteSettings: () => request<SiteSettings>('/api/admin/site-settings'),
-  saveSiteSettings: (payload: SiteSettingsPayload) => request<SiteSettings>('/api/admin/site-settings', {
     method: 'POST',
     body: JSON.stringify(payload),
   }),

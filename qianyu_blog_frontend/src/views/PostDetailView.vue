@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { blogApi } from '@/api/blog'
-import type { Post, SiteSettings } from '@/types/blog'
+import type { Post } from '@/types/blog'
 import { Marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
@@ -10,7 +10,6 @@ import hljs from 'highlight.js'
 const route = useRoute()
 const router = useRouter()
 const post = ref<Post>()
-const siteSettings = ref<SiteSettings>()
 const error = ref('')
 const readProgress = ref(0)
 const showBackTop = ref(false)
@@ -55,13 +54,10 @@ function resolveAssetUrl(url?: string) {
     : `${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'}${url}`
 }
 
-const coverImageUrl = computed(() =>
-  resolveAssetUrl(post.value?.coverImageUrl || siteSettings.value?.defaultPostCoverUrl),
-)
+const coverImageUrl = computed(() => resolveAssetUrl(post.value?.coverImageUrl))
 
 onMounted(async () => {
   try {
-    siteSettings.value = await blogApi.publicSiteSettings()
     post.value = await blogApi.publicPost(Number(route.params.id))
   } catch (err) {
     error.value = err instanceof Error ? err.message : '文章加载失败'

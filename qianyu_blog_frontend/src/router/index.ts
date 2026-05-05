@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import HomeView from '@/views/HomeView.vue'
 import PostDetailView from '@/views/PostDetailView.vue'
-import GameCenterView from '@/views/GameCenterView.vue'
 import AdminLoginView from '@/views/admin/AdminLoginView.vue'
 import AdminCategoriesView from '@/views/admin/AdminCategoriesView.vue'
 import AdminAISettingsView from '@/views/admin/AdminAISettingsView.vue'
@@ -15,7 +14,6 @@ const router = createRouter({
     { path: '/light', name: 'light', component: () => import('@/views/LightView.vue') },
     { path: '/archive', name: 'archive', component: () => import('@/views/ArchiveView.vue') },
     { path: '/posts/:id', name: 'post-detail', component: PostDetailView },
-    { path: '/games', name: 'games', component: GameCenterView },
     { path: '/about', name: 'about', component: () => import('@/views/AboutView.vue') },
     { path: '/chat', name: 'chat', component: ChatView },
     { path: '/admin/login', name: 'admin-login', component: AdminLoginView },

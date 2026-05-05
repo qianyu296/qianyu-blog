@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { blogApi } from '@/api/blog'
-import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import MusicCapsule from '@/components/music/MusicCapsule.vue'
 
-const auth = useAuthStore()
 const route = useRoute()
 const themeStore = useThemeStore()
 const siteName = ref('千语博客')
@@ -19,16 +16,9 @@ function updateScroll() {
   isScrolled.value = window.scrollY > 12
 }
 
-onMounted(async () => {
+onMounted(() => {
   themeStore.initTheme()
   window.addEventListener('scroll', updateScroll, { passive: true })
-  try {
-    const settings = await blogApi.publicSiteSettings()
-    siteName.value = settings.siteName || '千语博客'
-    footerText.value = settings.footerText || ''
-  } catch {
-    // use defaults
-  }
 })
 
 onUnmounted(() => {

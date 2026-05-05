@@ -117,33 +117,8 @@ class QianyuBlogApplicationTests {
     }
 
     @Test
-    void adminCanSaveSiteSettingsAndUploadMedia() throws Exception {
+    void adminCanUploadMedia() throws Exception {
         String token = loginToken();
-
-        mockMvc.perform(post("/api/admin/site-settings")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "siteName":"新的千语博客",
-                                  "siteSubtitle":"新的副标题",
-                                  "heroBadge":"开发 · 记录",
-                                  "heroTitle":"新的主标题",
-                                  "heroDescription":"新的首页描述",
-                                  "avatarImageUrl":"https://example.com/avatar.png",
-                                  "heroBackgroundImageUrl":"https://example.com/bg.png",
-                                  "defaultPostCoverUrl":"https://example.com/default-cover.png",
-                                  "githubUrl":"https://github.com/example",
-                                  "email":"hello@example.com",
-                                  "footerText":"新的页脚"
-                                }
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.siteName").value("新的千语博客"));
-
-        mockMvc.perform(get("/api/public/site/settings"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.heroTitle").value("新的主标题"));
 
         MockMultipartFile file = new MockMultipartFile(
                 "file",

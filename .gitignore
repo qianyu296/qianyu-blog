@@ -2,6 +2,7 @@
 .omc/
 .agents/
 .trae/
+.idea/
 skills/
 skills-lock.json
 aura-music-main/

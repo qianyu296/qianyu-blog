@@ -16,7 +16,7 @@ async function submit() {
   loading.value = true
   try {
     await auth.login(username.value, password.value)
-    await router.push((route.query.redirect as string) || '/admin/posts')
+    await router.push((route.query.redirect as string) || '/admin/dashboard')
   } catch (err) {
     error.value = err instanceof Error ? err.message : '登录失败，请检查用户名和密码是否正确'
   } finally {

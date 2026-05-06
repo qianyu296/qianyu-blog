@@ -26,16 +26,13 @@ pipeline {
           string(credentialsId: 'qianyu-blog-admin-username', variable: 'ADMIN_USERNAME'),
           string(credentialsId: 'qianyu-blog-admin-password', variable: 'ADMIN_PASSWORD')
         ]) {
-          sh '''
-            cat > .env <<EOF
-            APP_PORT=${APP_PORT}
-            QIANYU_BLOG_MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-            QIANYU_BLOG_DB_PASSWORD=${DB_PASSWORD}
-            QIANYU_BLOG_JWT_SECRET=${JWT_SECRET}
-            QIANYU_BLOG_ADMIN_USERNAME=${ADMIN_USERNAME}
-            QIANYU_BLOG_ADMIN_PASSWORD=${ADMIN_PASSWORD}
-            EOF
-          '''
+          writeFile file: '.env', text: """APP_PORT=${APP_PORT}
+QIANYU_BLOG_MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+QIANYU_BLOG_DB_PASSWORD=${DB_PASSWORD}
+QIANYU_BLOG_JWT_SECRET=${JWT_SECRET}
+QIANYU_BLOG_ADMIN_USERNAME=${ADMIN_USERNAME}
+QIANYU_BLOG_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+"""
         }
       }
     }

@@ -217,6 +217,51 @@ npm run dev
 docker compose up -d --build
 ```
 
+## Jenkins 部署
+
+如果你的 Jenkins 就跑在目标服务器上，最省事的方式是直接用仓库根目录的 `docker-compose.yml` 部署。
+
+### 服务器前置条件
+
+- 已安装 Docker
+- 已安装 Docker Compose Plugin（即 `docker compose` 命令可用）
+- Jenkins 运行用户有权限执行 Docker
+- 服务器 80 端口未被其他服务占用
+
+### Jenkins 凭据
+
+在 Jenkins 中创建以下 `Secret text` 凭据：
+
+- `qianyu-blog-mysql-root-password`
+- `qianyu-blog-db-password`
+- `qianyu-blog-jwt-secret`
+- `qianyu-blog-admin-username`
+- `qianyu-blog-admin-password`
+
+### Jenkins 任务配置
+
+1. 新建一个 Pipeline 任务
+2. 在代码仓库地址中填入你的 GitHub 仓库
+3. 让 Jenkins 使用仓库根目录的 `Jenkinsfile`
+4. 触发构建
+
+### 流水线做的事
+
+- 拉取最新代码
+- 在工作区生成 `.env`
+- 执行 `docker compose up -d --build --remove-orphans`
+- 通过 `http://127.0.0.1:${APP_PORT}/api/public/categories` 做健康检查
+
+### 本地环境文件示例
+
+仓库已提供示例文件：
+
+```env
+.env.production.example
+```
+
+如果你暂时不想把敏感值放进 Jenkins，也可以先在服务器仓库根目录手动创建 `.env`，内容参考该示例文件。
+
 启动后默认访问：
 
 - 站点首页：`http://localhost`

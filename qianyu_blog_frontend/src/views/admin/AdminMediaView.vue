@@ -4,6 +4,7 @@ import AdminLayout from '@/components/AdminLayout.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import { blogApi } from '@/api/blog'
 import type { MediaAsset } from '@/types/blog'
+import { formatFileSize, prepareImageForUpload } from '@/utils/imageUpload'
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
 
@@ -15,10 +16,13 @@ const uploadDialogVisible = ref(false)
 const pendingUploadFile = ref<File | null>(null)
 const pendingUploadPreviewUrl = ref('')
 const uploadDescription = ref('')
+const uploadCompressionHint = ref('')
+const preparingUpload = ref(false)
 const lightboxAsset = ref<MediaAsset | null>(null)
 const confirmVisible = ref(false)
 const confirmMessage = ref('')
 let pendingDeleteId: number | null = null
+let uploadSelectionToken = 0
 
 function resolveAssetUrl(url?: string) {
   if (!url) return ''
@@ -54,6 +58,8 @@ function resetPendingUpload() {
   pendingUploadFile.value = null
   pendingUploadPreviewUrl.value = ''
   uploadDescription.value = ''
+  uploadCompressionHint.value = ''
+  preparingUpload.value = false
   if (fileInputRef.value) fileInputRef.value.value = ''
 }
 
@@ -66,16 +72,41 @@ function closeUploadDialog() {
   resetPendingUpload()
 }
 
-function handleFileChange(event: Event) {
+async function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
 
-  if (pendingUploadPreviewUrl.value) {
-    URL.revokeObjectURL(pendingUploadPreviewUrl.value)
+  const currentToken = ++uploadSelectionToken
+  preparingUpload.value = true
+  uploadCompressionHint.value = '正在优化图片体积...'
+
+  try {
+    const prepared = await prepareImageForUpload(file)
+    if (currentToken !== uploadSelectionToken) return
+
+    if (pendingUploadPreviewUrl.value) {
+      URL.revokeObjectURL(pendingUploadPreviewUrl.value)
+    }
+    pendingUploadFile.value = prepared.file
+    pendingUploadPreviewUrl.value = URL.createObjectURL(prepared.file)
+    uploadCompressionHint.value = prepared.changed
+      ? `已自动压缩：${formatFileSize(prepared.originalSize)} -> ${formatFileSize(prepared.outputSize)}`
+      : `当前文件将按原图上传：${formatFileSize(prepared.originalSize)}`
+  } catch {
+    if (currentToken !== uploadSelectionToken) return
+
+    if (pendingUploadPreviewUrl.value) {
+      URL.revokeObjectURL(pendingUploadPreviewUrl.value)
+    }
+    pendingUploadFile.value = file
+    pendingUploadPreviewUrl.value = URL.createObjectURL(file)
+    uploadCompressionHint.value = `图片优化失败，已回退原图上传：${formatFileSize(file.size)}`
+  } finally {
+    if (currentToken === uploadSelectionToken) {
+      preparingUpload.value = false
+    }
   }
-  pendingUploadFile.value = file
-  pendingUploadPreviewUrl.value = URL.createObjectURL(file)
 }
 
 async function submitUpload() {
@@ -159,7 +190,7 @@ onUnmounted(() => {
       <div class="media-top-bar">
         <h1 class="media-title">光影手记</h1>
         <button class="btn btn-primary" :disabled="uploading" @click="openUploadDialog">
-          {{ uploading ? '上传中...' : '新增图片' }}
+          {{ preparingUpload ? '处理中...' : uploading ? '上传中...' : '新增图片' }}
         </button>
         <input
           ref="fileInputRef"
@@ -192,6 +223,8 @@ onUnmounted(() => {
           <img
             :src="resolveAssetUrl(asset.fileUrl)"
             :alt="asset.altText || asset.displayName || asset.originalFileName"
+            loading="lazy"
+            decoding="async"
             @click="openLightbox(asset)"
           />
           <figcaption>
@@ -249,7 +282,10 @@ onUnmounted(() => {
                   {{ pendingUploadFile ? '重新选择图片' : '选择图片' }}
                 </button>
                 <span v-if="pendingUploadFile" class="upload-file-name">{{ pendingUploadFile.name }}</span>
-                <span v-else class="form-hint">支持常见图片格式，先选图再填写描述</span>
+                <span v-if="uploadCompressionHint" class="upload-hint" :class="{ 'is-busy': preparingUpload }">
+                  {{ uploadCompressionHint }}
+                </span>
+                <span v-if="!pendingUploadFile" class="form-hint">支持常见图片格式，较大的图片会在上传前自动优化体积</span>
               </div>
 
               <div v-if="pendingUploadPreviewUrl" class="upload-preview">
@@ -273,7 +309,7 @@ onUnmounted(() => {
               <button class="btn btn-secondary" type="button" :disabled="uploading" @click="closeUploadDialog">
                 取消
               </button>
-              <button class="btn btn-primary" type="button" :disabled="uploading || !pendingUploadFile" @click="submitUpload">
+              <button class="btn btn-primary" type="button" :disabled="uploading || preparingUpload || !pendingUploadFile" @click="submitUpload">
                 {{ uploading ? '上传中...' : '开始上传' }}
               </button>
             </div>
@@ -426,6 +462,15 @@ onUnmounted(() => {
   font-size: 13px;
   color: var(--color-text-secondary);
   word-break: break-all;
+}
+
+.upload-hint {
+  font-size: 13px;
+  color: var(--secondary);
+}
+
+.upload-hint.is-busy {
+  color: var(--primary);
 }
 
 .upload-preview {

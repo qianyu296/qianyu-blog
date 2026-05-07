@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { blogApi } from '@/api/blog'
 import type { AiChatMessage } from '@/types/blog'
+import { loadAiImageAsset, saveAiImageAsset } from '@/utils/aiImageStorage'
 
 type ImagePreset = {
   id: string
@@ -15,6 +16,8 @@ type ChatUiMessage = AiChatMessage & {
   id: number
   pendingImage?: boolean
   imagePrompt?: string
+  persistedImageUrl?: string
+  imageStorageKey?: string
   startedAt?: number
   finishedAt?: number
   generationSeconds?: number
@@ -28,6 +31,8 @@ type ImageHistoryItem = {
   id: number
   prompt: string
   imageUrl: string
+  persistedImageUrl?: string
+  imageStorageKey?: string
   finishedAt: number
   generationSeconds: number
   presetId: string
@@ -36,10 +41,23 @@ type ImageHistoryItem = {
   requestedSize?: string
 }
 
+type PersistedChatMessage = Omit<ChatUiMessage, 'imageUrl' | 'persistedImageUrl'>
+  & { imageUrl?: string }
+
+type PersistedImageHistoryItem = Omit<ImageHistoryItem, 'imageUrl' | 'persistedImageUrl'>
+  & { imageUrl?: string }
+
+type HydratedImageState = {
+  imageUrl?: string
+  persistedImageUrl?: string
+  imageStorageKey?: string
+}
+
 const IMAGE_TIMEOUT_MS = 3 * 60 * 1000
 const HISTORY_STORAGE_KEY = 'qianyu_ai_image_history'
+const MESSAGE_STORAGE_KEY = 'qianyu_ai_chat_messages'
+const MESSAGE_LIMIT = 100
 const HISTORY_LIMIT = 24
-const PERSISTED_IMAGE_URL_MAX_LENGTH = 200_000
 
 const imagePresets: ImagePreset[] = [
   { id: 'auto', title: '自动判断', ratio: 'Auto', description: '按提示词内容自动推断最合适的尺寸。' },
@@ -79,53 +97,19 @@ function createMessage(message: Omit<ChatUiMessage, 'id'>): ChatUiMessage {
   return { ...message, id: nextMessageId++ }
 }
 
-function restoreHistory() {
-  let raw: string | null = null
-  try {
-    raw = localStorage.getItem(HISTORY_STORAGE_KEY)
-  } catch {
-    return
-  }
-  if (!raw) return
+function trimMessagesList<T>(items: T[]) {
+  return items.slice(-MESSAGE_LIMIT)
+}
 
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return
-
-    imageHistory.value = parsed
-      .filter((item): item is ImageHistoryItem =>
-        item
-        && typeof item.id === 'number'
-        && typeof item.prompt === 'string'
-        && typeof item.imageUrl === 'string'
-        && typeof item.finishedAt === 'number'
-        && typeof item.generationSeconds === 'number'
-        && typeof item.presetId === 'string'
-        && typeof item.presetTitle === 'string'
-        && typeof item.presetRatio === 'string',
-      )
-      .slice(0, HISTORY_LIMIT)
-
-    // Sync nextMessageId with restored history to avoid id collisions
-    const maxId = imageHistory.value.reduce((max, item) => Math.max(max, item.id), 0)
-    if (maxId >= nextMessageId) {
-      nextMessageId = maxId + 1
-    }
-  } catch {
-    imageHistory.value = []
+function syncNextMessageId(records: Array<{ id: number }>) {
+  const maxId = records.reduce((max, item) => Math.max(max, item.id), 0)
+  if (maxId >= nextMessageId) {
+    nextMessageId = maxId + 1
   }
 }
 
-function pushHistory(item: ImageHistoryItem) {
-  imageHistory.value = [item, ...imageHistory.value.filter(history => history.id !== item.id)].slice(0, HISTORY_LIMIT)
-  expandedHistoryId.value = item.id
-}
-
-function canPersistHistoryItem(item: ImageHistoryItem) {
-  if (!item.imageUrl) return false
-  if (item.imageUrl.startsWith('blob:')) return false
-  if (!item.imageUrl.startsWith('data:')) return true
-  return item.imageUrl.length <= PERSISTED_IMAGE_URL_MAX_LENGTH
+function createImageStorageKey(id: number) {
+  return `ai-image-${id}`
 }
 
 async function createDisplayImageUrl(url: string) {
@@ -138,9 +122,242 @@ async function createDisplayImageUrl(url: string) {
   return objectUrl
 }
 
+async function buildStoredImageState(sourceUrl: string, id: number): Promise<HydratedImageState> {
+  if (!sourceUrl.startsWith('data:')) {
+    return {
+      imageUrl: sourceUrl,
+      persistedImageUrl: sourceUrl,
+    }
+  }
+
+  const imageStorageKey = createImageStorageKey(id)
+  try {
+    await saveAiImageAsset(imageStorageKey, sourceUrl)
+  } catch {
+    return {
+      imageUrl: await createDisplayImageUrl(sourceUrl),
+      persistedImageUrl: sourceUrl,
+    }
+  }
+
+  return {
+    imageUrl: await createDisplayImageUrl(sourceUrl),
+    persistedImageUrl: sourceUrl,
+    imageStorageKey,
+  }
+}
+
+async function hydrateStoredImage(sourceUrl?: string, imageStorageKey?: string): Promise<HydratedImageState | null> {
+  if (imageStorageKey) {
+    let storedUrl: string | null = null
+    try {
+      storedUrl = await loadAiImageAsset(imageStorageKey)
+    } catch {
+      storedUrl = null
+    }
+    if (!storedUrl) return null
+
+    return {
+      imageUrl: await createDisplayImageUrl(storedUrl),
+      persistedImageUrl: storedUrl,
+      imageStorageKey,
+    }
+  }
+
+  if (!sourceUrl) {
+    return {
+      imageUrl: undefined,
+      persistedImageUrl: undefined,
+    }
+  }
+
+  return {
+    imageUrl: await createDisplayImageUrl(sourceUrl),
+    persistedImageUrl: sourceUrl,
+  }
+}
+
+function parseStoredMessage(item: unknown): PersistedChatMessage | null {
+  if (!item || typeof item !== 'object') return null
+
+  const candidate = item as Partial<PersistedChatMessage>
+  if (
+    typeof candidate.id !== 'number'
+    || (candidate.role !== 'user' && candidate.role !== 'assistant')
+    || typeof candidate.content !== 'string'
+  ) {
+    return null
+  }
+
+  return candidate as PersistedChatMessage
+}
+
+function parseStoredHistoryItem(item: unknown): PersistedImageHistoryItem | null {
+  if (!item || typeof item !== 'object') return null
+
+  const candidate = item as Partial<PersistedImageHistoryItem>
+  if (
+    typeof candidate.id !== 'number'
+    || typeof candidate.prompt !== 'string'
+    || typeof candidate.finishedAt !== 'number'
+    || typeof candidate.generationSeconds !== 'number'
+    || typeof candidate.presetId !== 'string'
+    || typeof candidate.presetTitle !== 'string'
+    || typeof candidate.presetRatio !== 'string'
+  ) {
+    return null
+  }
+
+  return candidate as PersistedImageHistoryItem
+}
+
+async function hydrateStoredMessage(item: unknown): Promise<ChatUiMessage | null> {
+  const candidate = parseStoredMessage(item)
+  if (!candidate) return null
+
+  const imageState = await hydrateStoredImage(candidate.imageUrl, candidate.imageStorageKey)
+  if ((candidate.imageUrl || candidate.imageStorageKey) && !imageState) {
+    return null
+  }
+
+  return {
+    ...candidate,
+    imageUrl: imageState?.imageUrl,
+    persistedImageUrl: imageState?.persistedImageUrl,
+    imageStorageKey: imageState?.imageStorageKey,
+  }
+}
+
+async function hydrateStoredHistoryItem(item: unknown): Promise<ImageHistoryItem | null> {
+  const candidate = parseStoredHistoryItem(item)
+  if (!candidate) return null
+
+  const imageState = await hydrateStoredImage(candidate.imageUrl, candidate.imageStorageKey)
+  if (!imageState?.imageUrl || !imageState.persistedImageUrl) {
+    return null
+  }
+
+  return {
+    ...candidate,
+    imageUrl: imageState.imageUrl,
+    persistedImageUrl: imageState.persistedImageUrl,
+    imageStorageKey: imageState.imageStorageKey,
+  }
+}
+
+function serializeStoredImageFields(item: { persistedImageUrl?: string, imageStorageKey?: string }) {
+  if (item.imageStorageKey) {
+    return { imageStorageKey: item.imageStorageKey }
+  }
+  if (item.persistedImageUrl) {
+    return { imageUrl: item.persistedImageUrl }
+  }
+  return {}
+}
+
+function serializeMessage(message: ChatUiMessage): PersistedChatMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    pendingImage: message.pendingImage,
+    imagePrompt: message.imagePrompt,
+    startedAt: message.startedAt,
+    finishedAt: message.finishedAt,
+    generationSeconds: message.generationSeconds,
+    presetId: message.presetId,
+    presetTitle: message.presetTitle,
+    presetRatio: message.presetRatio,
+    requestedSize: message.requestedSize,
+    ...serializeStoredImageFields(message),
+  }
+}
+
+function serializeHistoryItem(item: ImageHistoryItem): PersistedImageHistoryItem {
+  return {
+    id: item.id,
+    prompt: item.prompt,
+    finishedAt: item.finishedAt,
+    generationSeconds: item.generationSeconds,
+    presetId: item.presetId,
+    presetTitle: item.presetTitle,
+    presetRatio: item.presetRatio,
+    requestedSize: item.requestedSize,
+    ...serializeStoredImageFields(item),
+  }
+}
+
+async function restoreMessages() {
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(MESSAGE_STORAGE_KEY)
+  } catch {
+    return
+  }
+  if (!raw) return
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return
+
+    const restoredMessages = await Promise.all(parsed.map(hydrateStoredMessage))
+    messages.value = trimMessagesList(
+      restoredMessages.filter((item): item is ChatUiMessage => item !== null),
+    )
+    syncNextMessageId(messages.value)
+  } catch {
+    messages.value = []
+  }
+}
+
+async function restoreHistory() {
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(HISTORY_STORAGE_KEY)
+  } catch {
+    return
+  }
+  if (!raw) return
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return
+
+    const restoredHistory = await Promise.all(parsed.map(hydrateStoredHistoryItem))
+    imageHistory.value = restoredHistory
+      .filter((item): item is ImageHistoryItem => item !== null)
+      .slice(0, HISTORY_LIMIT)
+    syncNextMessageId(imageHistory.value)
+  } catch {
+    imageHistory.value = []
+  }
+}
+
+async function restorePersistedState() {
+  await Promise.all([restoreMessages(), restoreHistory()])
+}
+
+function pushHistory(item: ImageHistoryItem) {
+  imageHistory.value = [item, ...imageHistory.value.filter(history => history.id !== item.id)].slice(0, HISTORY_LIMIT)
+  expandedHistoryId.value = item.id
+}
+
 function clearHistory() {
   imageHistory.value = []
   expandedHistoryId.value = null
+}
+
+function clearChat() {
+  messages.value = []
+  currentAssistantContent.value = ''
+  error.value = ''
+  inputMessage.value = ''
+  previewImageUrl.value = ''
+  try {
+    localStorage.removeItem(MESSAGE_STORAGE_KEY)
+  } catch {
+    // Ignore storage access failures.
+  }
 }
 
 function removeFromHistory(id: number) {
@@ -213,6 +430,7 @@ async function sendMessage() {
 
   messages.value.push(createMessage({ role: 'user', content: text }))
   messages.value.push(createMessage({ role: 'assistant', content: '' }))
+  messages.value = trimMessagesList(messages.value)
   const assistantIndex = messages.value.length - 1
 
   inputMessage.value = ''
@@ -317,37 +535,44 @@ async function generateImage() {
       requestedSize: preset.size,
     }),
   )
+  messages.value = trimMessagesList(messages.value)
   const assistantIndex = messages.value.length - 1
   scrollToBottom()
 
   try {
     const result = await blogApi.generateImage({ prompt, size: preset.size }, controller.signal)
-    const displayImageUrl = await createDisplayImageUrl(result.url)
     const finishedAt = Date.now()
     const generationSeconds = Math.max(1, Math.round((finishedAt - startedAt) / 1000))
+    const imageState = await buildStoredImageState(result.url, messages.value[assistantIndex]?.id ?? Date.now())
 
     if (messages.value[assistantIndex]) {
       const updatedMessage: ChatUiMessage = {
         ...messages.value[assistantIndex],
         content: '已生成 1 张图片',
-        imageUrl: displayImageUrl,
+        imageUrl: imageState.imageUrl,
+        persistedImageUrl: imageState.persistedImageUrl,
+        imageStorageKey: imageState.imageStorageKey,
         pendingImage: false,
         finishedAt,
         generationSeconds,
       }
       messages.value[assistantIndex] = updatedMessage
 
-      pushHistory({
-        id: updatedMessage.id,
-        prompt,
-        imageUrl: displayImageUrl,
-        finishedAt,
-        generationSeconds,
-        presetId: preset.id,
-        presetTitle: preset.title,
-        presetRatio: preset.ratio,
-        requestedSize: preset.size,
-      })
+      if (imageState.imageUrl) {
+        pushHistory({
+          id: updatedMessage.id,
+          prompt,
+          imageUrl: imageState.imageUrl,
+          persistedImageUrl: imageState.persistedImageUrl,
+          imageStorageKey: imageState.imageStorageKey,
+          finishedAt,
+          generationSeconds,
+          presetId: preset.id,
+          presetTitle: preset.title,
+          presetRatio: preset.ratio,
+          requestedSize: preset.size,
+        })
+      }
     }
   } catch (exception) {
     const finishedAt = Date.now()
@@ -383,16 +608,28 @@ function openImageDialog() {
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
-    sendMessage()
+    void sendMessage()
   }
 }
 
+watch(messages, (value) => {
+  if (value.length > MESSAGE_LIMIT) {
+    messages.value = trimMessagesList(value)
+    return
+  }
+  try {
+    localStorage.setItem(MESSAGE_STORAGE_KEY, JSON.stringify(trimMessagesList(value).map(serializeMessage)))
+  } catch {
+    // Ignore storage quota and privacy-mode failures; keep messages in memory for this session.
+  }
+}, { deep: true })
+
 watch(imageHistory, (value) => {
   try {
-    const persistableItems = value
-      .filter(canPersistHistoryItem)
+    const persistedItems = value
       .slice(0, HISTORY_LIMIT)
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(persistableItems))
+      .map(serializeHistoryItem)
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(persistedItems))
   } catch {
     // Ignore storage quota and privacy-mode failures; keep history in memory for this session.
   }
@@ -402,8 +639,10 @@ watch(imageHistory, (value) => {
 }, { deep: true })
 
 onMounted(() => {
-  restoreHistory()
-  scrollToBottom()
+  void restorePersistedState().then(() => {
+    scrollToBottom()
+  })
+
   clockTimer = window.setInterval(() => {
     clockTick.value = Date.now()
   }, 1000)
@@ -422,8 +661,15 @@ onUnmounted(() => {
   <div class="chat-layout animate-fade-in">
     <section class="chat-page">
       <header class="chat-header">
-        <h1>AI构建未来</h1>
-        <p class="subtitle">可使用模型为gpt-5.4以及gpt-image-2</p>
+        <div class="chat-header-top">
+          <div>
+            <h1>AI构建未来</h1>
+            <p class="subtitle">可使用模型为gpt-5.4以及gpt-image-2</p>
+          </div>
+          <button class="history-clear-btn" type="button" :disabled="messages.length === 0" @click="clearChat">
+            清空聊天
+          </button>
+        </div>
       </header>
 
       <div class="chat-container">
@@ -776,8 +1022,14 @@ onUnmounted(() => {
 }
 
 .chat-header {
-  text-align: center;
   margin-bottom: var(--space-6);
+}
+
+.chat-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
 }
 
 .chat-header h1 {
@@ -1729,6 +1981,11 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
+  .chat-header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .chat-container {
     height: calc(100vh - 120px);
   }
